@@ -176,36 +176,26 @@ def extract_sift_features(image, n_features=100):
     
     gray = (gray * 255).astype(np.uint8)
     
-    # Initialize SIFT detector
-    sift = cv2.SIFT_create()
-    
-    # Detect keypoints and compute descriptors
-    keypoints, descriptors = sift.detectAndCompute(gray, None)
-    
-    # If no keypoints found, return zeros
-    if descriptors is None:
-        return np.zeros(n_features)
-    
-    # If we have too many keypoints, select a subset
-    if len(keypoints) > n_features:
-        # Select strongest keypoints
-        keypoints = sorted(keypoints, key=lambda x: x.response, reverse=True)[:n_features]
-        indices = [kp.class_id for kp in keypoints]
-        descriptors = descriptors[indices]
-    
-    # If we have too few keypoints, pad with zeros
-    if len(keypoints) < n_features:
-        padding = np.zeros((n_features - len(keypoints), descriptors.shape[1]))
-        descriptors = np.vstack([descriptors, padding])
-    
-    # Flatten descriptors
-    features = descriptors.flatten()
-    
-    # Normalize features
-    if np.sum(features) > 0:
-        features = features / np.sum(features)
-    
-    return features
+    try:
+        # Initialize SIFT detector
+        sift = cv2.SIFT_create()
+        
+        # Detect keypoints and compute descriptors
+        keypoints, descriptors = sift.detectAndCompute(gray, None)
+        
+        # If no keypoints found, return zeros
+        if descriptors is None or len(keypoints) == 0:
+            return np.zeros(128)  # Standard SIFT dimension
+        
+        # Calculate average descriptor
+        avg_descriptor = np.mean(descriptors, axis=0)
+        
+        # Ensure consistent length by returning the average descriptor
+        return avg_descriptor
+        
+    except Exception as e:
+        # In case of any errors, return a zero vector
+        return np.zeros(128)  # Standard SIFT dimension
 
 def extract_features(image, method="Combined"):
     """

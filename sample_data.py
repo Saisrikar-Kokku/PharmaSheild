@@ -241,9 +241,79 @@ def create_synthetic_image(is_fake=False, size=(224, 224), random_state=None):
     image_pil = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
     return image_pil
 
-def load_sample_data(n_samples=200, feature_extraction_method="Combined", random_state=42):
+def create_augmented_synthetic_image(is_fake=False, size=(224, 224), random_state=None, augmentation_level=0):
     """
-    Load or generate sample data for model training
+    Create a synthetic medicine image with augmentation for more diversity
+    
+    Args:
+        is_fake: Whether to create a fake or genuine medicine image
+        size: Size of the image
+        random_state: Random seed
+        augmentation_level: Level of augmentation (0=none, 1=mild, 2=strong)
+        
+    Returns:
+        image: PIL Image object
+    """
+    if random_state is not None:
+        np.random.seed(random_state)
+        random.seed(random_state)
+    
+    # Create base synthetic image
+    image = create_synthetic_image(is_fake=is_fake, size=size, random_state=random_state)
+    
+    # Convert to numpy array for augmentation
+    img_array = np.array(image)
+    
+    if augmentation_level > 0:
+        # Apply random rotation
+        angle = np.random.randint(-30, 30) if augmentation_level == 2 else np.random.randint(-15, 15)
+        h, w = img_array.shape[:2]
+        M = cv2.getRotationMatrix2D((w/2, h/2), angle, 1)
+        img_array = cv2.warpAffine(img_array, M, (w, h))
+        
+        # Apply random brightness/contrast adjustment
+        alpha = np.random.uniform(0.8, 1.2)  # Contrast
+        beta = np.random.randint(-20, 20)    # Brightness
+        img_array = cv2.convertScaleAbs(img_array, alpha=alpha, beta=beta)
+        
+        if augmentation_level == 2:
+            # Apply random perspective transform for stronger augmentation
+            pts1 = np.float32([[0, 0], [w, 0], [0, h], [w, h]])
+            shift = w * 0.1
+            pts2 = np.float32([
+                [np.random.randint(0, int(shift)), np.random.randint(0, int(shift))],
+                [w - np.random.randint(0, int(shift)), np.random.randint(0, int(shift))],
+                [np.random.randint(0, int(shift)), h - np.random.randint(0, int(shift))],
+                [w - np.random.randint(0, int(shift)), h - np.random.randint(0, int(shift))]
+            ])
+            M = cv2.getPerspectiveTransform(pts1, pts2)
+            img_array = cv2.warpPerspective(img_array, M, (w, h))
+            
+            # Add random lighting effects
+            for c in range(3):
+                channel = img_array[:, :, c]
+                light_direction = np.random.randint(0, 4)
+                gradient = np.zeros_like(channel, dtype=np.float32)
+                
+                if light_direction == 0:  # Top to bottom
+                    gradient = np.linspace(0, 1, h)[:, np.newaxis] * np.ones(w)
+                elif light_direction == 1:  # Bottom to top
+                    gradient = np.linspace(1, 0, h)[:, np.newaxis] * np.ones(w)
+                elif light_direction == 2:  # Left to right
+                    gradient = np.ones(h)[:, np.newaxis] * np.linspace(0, 1, w)
+                else:  # Right to left
+                    gradient = np.ones(h)[:, np.newaxis] * np.linspace(1, 0, w)
+                
+                # Apply gradient with random intensity
+                intensity = np.random.uniform(0.05, 0.2)
+                img_array[:, :, c] = np.clip(channel + gradient * intensity * 255, 0, 255)
+    
+    # Convert back to PIL image
+    return Image.fromarray(img_array.astype(np.uint8))
+
+def load_sample_data(n_samples=300, feature_extraction_method="Combined", random_state=42):
+    """
+    Load or generate sample data for model training with enhanced diversity
     
     Args:
         n_samples: Number of samples to generate
@@ -268,10 +338,14 @@ def load_sample_data(n_samples=200, feature_extraction_method="Combined", random
     for i in range(n_samples):
         is_fake = i >= n_per_class
         
-        # Create synthetic image
-        image = create_synthetic_image(
+        # Apply different augmentation levels for increased diversity
+        augmentation_level = i % 3  # 0, 1, or 2
+        
+        # Create synthetic image with augmentation
+        image = create_augmented_synthetic_image(
             is_fake=is_fake, 
-            random_state=random_state + i
+            random_state=random_state + i,
+            augmentation_level=augmentation_level
         )
         
         # Preprocess image
@@ -303,12 +377,24 @@ def get_sample_images(n_samples=5):
     
     # Generate genuine medicine samples
     for i in range(n_samples // 2):
-        image = create_synthetic_image(is_fake=False, random_state=42 + i)
+        # Use different augmentation levels for more variety
+        augmentation_level = i % 3
+        image = create_augmented_synthetic_image(
+            is_fake=False, 
+            random_state=42 + i,
+            augmentation_level=augmentation_level
+        )
         sample_images[f"Genuine Medicine {i+1}"] = image
     
     # Generate fake medicine samples
     for i in range(n_samples - n_samples // 2):
-        image = create_synthetic_image(is_fake=True, random_state=100 + i)
+        # Use different augmentation levels for more variety
+        augmentation_level = i % 3
+        image = create_augmented_synthetic_image(
+            is_fake=True, 
+            random_state=100 + i,
+            augmentation_level=augmentation_level
+        )
         sample_images[f"Fake Medicine {i+1}"] = image
     
     return sample_images

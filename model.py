@@ -32,34 +32,44 @@ def train_model(X, y, model_type="Random Forest", test_size=0.2, random_state=42
         X, y, test_size=test_size, random_state=random_state, stratify=y
     )
     
-    # Initialize model based on model_type
+    # Initialize model based on model_type with optimized hyperparameters
     if model_type == "Random Forest":
         model = RandomForestClassifier(
-            n_estimators=100,
-            max_depth=10,
-            min_samples_split=5,
+            n_estimators=200,
+            max_depth=15,
+            min_samples_split=4,
             min_samples_leaf=2,
+            max_features='sqrt',
+            bootstrap=True,
+            class_weight='balanced',
             random_state=random_state
         )
     elif model_type == "SVM":
         model = SVC(
             kernel='rbf',
-            C=10,
-            gamma='scale',
+            C=100,  # Increased regularization parameter
+            gamma='auto',
             probability=True,
+            class_weight='balanced',  # Handle imbalanced classes better
             random_state=random_state
         )
     elif model_type == "XGBoost":
         model = xgb.XGBClassifier(
-            n_estimators=100,
-            max_depth=5,
-            learning_rate=0.1,
+            n_estimators=200,
+            max_depth=7,
+            learning_rate=0.05,  # Lower learning rate for better generalization
+            subsample=0.8,  # Use a subset of samples per tree
+            colsample_bytree=0.8,  # Use a subset of features per tree
+            min_child_weight=3,  # Control overfitting
+            scale_pos_weight=1,  # Balance positive/negative weights
             random_state=random_state
         )
     else:
-        # Default to Random Forest
+        # Default to Random Forest with optimized parameters
         model = RandomForestClassifier(
-            n_estimators=100, 
+            n_estimators=200, 
+            max_depth=15,
+            class_weight='balanced',
             random_state=random_state
         )
     

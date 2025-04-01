@@ -8,7 +8,7 @@ from skimage import color, exposure
 
 def preprocess_image(image, target_size=(224, 224)):
     """
-    Preprocess an image for feature extraction
+    Preprocess an image for feature extraction with enhanced robustness
     
     Args:
         image: PIL Image or file path
@@ -38,6 +38,23 @@ def preprocess_image(image, target_size=(224, 224)):
     # Convert to RGB if needed (OpenCV uses BGR)
     if len(img_array.shape) == 3 and img_array.shape[2] == 3:
         img_array = cv2.cvtColor(img_array, cv2.COLOR_BGR2RGB)
+    
+    # Apply histogram equalization to improve contrast
+    if len(img_array.shape) == 3:
+        # Convert to LAB color space
+        lab = cv2.cvtColor(img_array.astype(np.uint8), cv2.COLOR_RGB2LAB)
+        # Split the LAB channels
+        l, a, b = cv2.split(lab)
+        # Apply CLAHE to L channel
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        cl = clahe.apply(l)
+        # Merge the enhanced L channel with A and B channels
+        enhanced_lab = cv2.merge((cl, a, b))
+        # Convert back to RGB
+        img_array = cv2.cvtColor(enhanced_lab, cv2.COLOR_LAB2RGB)
+    
+    # Add Gaussian blur to reduce noise
+    img_array = cv2.GaussianBlur(img_array, (3, 3), 0)
     
     # Normalize the image
     img_array = img_array.astype(np.float32) / 255.0
@@ -140,13 +157,63 @@ def extract_texture_features(image):
     
     return hist_mag
 
+def extract_sift_features(image, n_features=100):
+    """
+    Extract SIFT (Scale-Invariant Feature Transform) features
+    
+    Args:
+        image: Preprocessed image array
+        n_features: Number of SIFT features to extract
+        
+    Returns:
+        features: SIFT features
+    """
+    # Convert to grayscale and uint8
+    if len(image.shape) == 3 and image.shape[2] == 3:
+        gray = color.rgb2gray(image)
+    else:
+        gray = image
+    
+    gray = (gray * 255).astype(np.uint8)
+    
+    # Initialize SIFT detector
+    sift = cv2.SIFT_create()
+    
+    # Detect keypoints and compute descriptors
+    keypoints, descriptors = sift.detectAndCompute(gray, None)
+    
+    # If no keypoints found, return zeros
+    if descriptors is None:
+        return np.zeros(n_features)
+    
+    # If we have too many keypoints, select a subset
+    if len(keypoints) > n_features:
+        # Select strongest keypoints
+        keypoints = sorted(keypoints, key=lambda x: x.response, reverse=True)[:n_features]
+        indices = [kp.class_id for kp in keypoints]
+        descriptors = descriptors[indices]
+    
+    # If we have too few keypoints, pad with zeros
+    if len(keypoints) < n_features:
+        padding = np.zeros((n_features - len(keypoints), descriptors.shape[1]))
+        descriptors = np.vstack([descriptors, padding])
+    
+    # Flatten descriptors
+    features = descriptors.flatten()
+    
+    # Normalize features
+    if np.sum(features) > 0:
+        features = features / np.sum(features)
+    
+    return features
+
 def extract_features(image, method="Combined"):
     """
     Extract features from an image using the specified method
     
     Args:
         image: Preprocessed image array
-        method: Feature extraction method ("HOG", "Color Histograms", "Combined")
+        method: Feature extraction method ("HOG", "Color Histograms", "Combined", "Advanced")
         
     Returns:
         features: Extracted features
@@ -159,7 +226,14 @@ def extract_features(image, method="Combined"):
         hog_features = extract_hog_features(image)
         color_features = extract_color_histogram(image)
         texture_features = extract_texture_features(image)
-        features = np.concatenate([hog_features, color_features, texture_features])
+        
+        # Use SIFT features for more robust recognition
+        try:
+            sift_features = extract_sift_features(image)
+            features = np.concatenate([hog_features, color_features, texture_features, sift_features])
+        except:
+            # If SIFT fails, fallback to original features
+            features = np.concatenate([hog_features, color_features, texture_features])
     else:
         # Default to HOG
         features = extract_hog_features(image)

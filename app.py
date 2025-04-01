@@ -139,14 +139,14 @@ elif app_mode == "Detect Fake Medicine":
         uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
         if uploaded_file is not None:
             image = Image.open(uploaded_file)
-            st.image(image, caption="Uploaded Image", use_column_width=True)
+            st.image(image, caption="Uploaded Image", use_container_width=True)
             
     else:  # Use sample image
         sample_images = get_sample_images()
         if sample_images:
             sample_choice = st.selectbox("Select a sample image:", list(sample_images.keys()))
             image = sample_images[sample_choice]
-            st.image(image, caption=f"Sample: {sample_choice}", use_column_width=True)
+            st.image(image, caption=f"Sample: {sample_choice}", use_container_width=True)
         else:
             st.error("No sample images available")
     
@@ -166,19 +166,19 @@ elif app_mode == "Detect Fake Medicine":
             result_col1, result_col2 = st.columns(2)
             
             with result_col1:
-                if prediction == 1:
+                if prediction[0] == 1:
                     st.error(f"⚠️ **FAKE MEDICINE DETECTED** ⚠️")
                 else:
                     st.success(f"✅ **GENUINE MEDICINE** ✅")
                     
             with result_col2:
-                confidence = probability[0][int(prediction)] * 100
+                confidence = float(probability[0][int(prediction[0])]) * 100
                 st.metric("Confidence", f"{confidence:.2f}%")
             
             st.write(f"**Detailed Analysis:** The model is {confidence:.2f}% confident in this prediction.")
             
             # Warning/notice
-            if prediction == 1:
+            if prediction[0] == 1:
                 st.warning("""
                 **Important Notice:** This is only a machine learning prediction and should not be taken as definitive proof. 
                 If you suspect a counterfeit medicine, please consult with a healthcare professional or regulatory authority.
